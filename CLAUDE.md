@@ -54,26 +54,26 @@ agent-gate/
 
 Three specs, implemented in order. Each produces its own tasks with acceptance criteria.
 
-### Spec 1: Core Engine (pure logic, no I/O)
+### Spec 1: Core Engine (pure logic, no I/O) — DONE
 
 Models, config loading, permission engine, SQLite storage, action dispatcher. All modules are independently testable with no network dependencies.
 
 - `models.py` — Decision enum, ToolRequest, ToolResult, PendingApproval, AuditEntry
 - `config.py` — YAML loading, recursive env var substitution, typed dataclasses, validation
 - `engine.py` — Signature builders (per-tool), input validation, fnmatch evaluation, deny > allow > ask
-- `db.py` — Schema creation, audit logging, pending request CRUD, stale cleanup
+- `db.py` — Schema creation, audit logging, pending request CRUD, stale cleanup, resolution updates
 - `executor.py` — TOOL_SERVICE_MAP, dispatch, unknown tool rejection
 
-### Spec 2: Gateway Server (networking, depends on Spec 1)
+### Spec 2: Gateway Server (networking, depends on Spec 1) — DONE
 
 WebSocket server, Telegram bot, Home Assistant client, main orchestration.
 
-- `server.py` — WS server, JSON-RPC parsing, auth flow (10s deadline), rate limiting, resolve_request() with asyncio.Lock
-- `telegram.py` — PTB manual lifecycle (NOT run_polling), PicklePersistence, approval messages, timeout tasks, InvalidCallbackData handling
-- `homeassistant.py` — aiohttp session, HA REST API mapping, health check (GET /api/), error mapping
+- `server.py` — WS server, JSON-RPC parsing, auth flow (10s deadline), rate limiting, pending approval persistence, offline result storage
+- `telegram.py` — PTB manual lifecycle (NOT run_polling), PicklePersistence, approval messages, timeout tasks, InvalidCallbackData handling, asyncio.Lock race-safe resolution
+- `homeassistant.py` — aiohttp session, HA REST API mapping, health check (GET /api/), error mapping (401/404/connection)
 - `__main__.py` — Full orchestration: config → db → services → health checks → PTB start → WS serve → signal handling → shutdown
 
-### Spec 3: SDK + Packaging (depends on Spec 2)
+### Spec 3: SDK + Packaging (depends on Spec 2) — TODO
 
 Client library, Docker deployment, integration tests, pyproject.toml.
 
@@ -105,6 +105,7 @@ Repeat for each spec phase.
 ### PTB Event Loop
 
 PTB v21's `run_polling()` creates its own event loop — DO NOT use it. Use manual lifecycle:
+
 ```python
 async with ptb_app:
     await ptb_app.start()
@@ -123,10 +124,12 @@ A deny rule matching `ha_call_service(lock.*)` overrides a more specific allow r
 ### Signature Builders
 
 Each tool type has an explicit builder (not raw dict iteration):
+
 ```python
 "ha_call_service" → f"ha_call_service({domain}.{service}, {entity_id})"
 "ha_get_state"    → f"ha_get_state({entity_id})"
 ```
+
 Fallback for unknown tools: sorted keys for determinism.
 
 ### Input Validation
@@ -138,9 +141,17 @@ HA identifiers must match: `^[a-z_][a-z0-9_]*(\.[a-z0-9_]+)?$`
 
 WSS (TLS) required by default. Plaintext `ws://` only with explicit `--insecure` flag.
 
+## Linting & Formatting
+
+- **Ruff** — single tool for linting + formatting, configured in `pyproject.toml`
+- Lint: `ruff check src/ tests/`
+- Format: `ruff format --check src/ tests/`
+- Pre-commit hook (`.git/hooks/pre-commit`) runs: ruff format → ruff check → pytest
+
 ## Testing
 
 - TDD: write tests BEFORE implementation
-- Use `pytest` + `pytest-asyncio`
+- Use `pytest` + `pytest-asyncio` (asyncio_mode = "auto")
 - Mock external services: WebSocket (for server tests), Telegram Bot API (for telegram.py), HA REST API (for homeassistant.py)
 - Unit tests per module, integration test for full flow
+- 231 tests across 11 test files
