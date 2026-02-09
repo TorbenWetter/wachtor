@@ -73,14 +73,14 @@ WebSocket server, Telegram bot, Home Assistant client, main orchestration.
 - `homeassistant.py` — aiohttp session, HA REST API mapping, health check (GET /api/), error mapping (401/404/connection)
 - `__main__.py` — Full orchestration: config → db → services → health checks → PTB start → WS serve → signal handling → shutdown
 
-### Spec 3: SDK + Packaging (depends on Spec 2) — TODO
+### Spec 3: SDK + Packaging (depends on Spec 2) — DONE
 
-Client library, Docker deployment, integration tests, pyproject.toml.
+Client library, Docker deployment, integration tests, README.
 
-- `client.py` — AgentGateClient with async context manager, auto-reconnection, typed errors
-- Docker — Dockerfile + docker-compose.yml with TLS, volumes, env_file
-- Integration test — end-to-end with mocked HA + Telegram
-- `pyproject.toml` — package metadata, entry points, dependency pins
+- `client.py` — AgentGateClient with async context manager, auto-reconnection (exponential backoff), typed error hierarchy, offline result retrieval
+- Docker — Dockerfile (python:3.12-slim) + docker-compose.yml with volumes, env_file
+- Integration test — end-to-end through real WebSocket with mocked HA + Telegram
+- `README.md` — project overview, SDK usage, Docker deployment, protocol reference
 
 ## Development Workflow
 
@@ -154,4 +154,4 @@ WSS (TLS) required by default. Plaintext `ws://` only with explicit `--insecure`
 - Use `pytest` + `pytest-asyncio` (asyncio_mode = "auto")
 - Mock external services: WebSocket (for server tests), Telegram Bot API (for telegram.py), HA REST API (for homeassistant.py)
 - Unit tests per module, integration test for full flow
-- 231 tests across 11 test files
+- 276 tests across 14 test files
