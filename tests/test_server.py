@@ -93,6 +93,7 @@ TOKEN = "test-secret-token"
 
 def _make_server(**overrides) -> GatewayServer:
     """Create a GatewayServer with mocked dependencies."""
+    registry = overrides.pop("registry", None)
     engine = overrides.pop("engine", MagicMock(spec=PermissionEngine))
     executor = overrides.pop("executor", AsyncMock(spec=Executor))
     messenger = overrides.pop("messenger", AsyncMock(spec=MessengerAdapter))
@@ -110,6 +111,7 @@ def _make_server(**overrides) -> GatewayServer:
         db=db,
         approval_timeout=overrides.pop("approval_timeout", 900),
         rate_limit_config=rate_limit_config,
+        registry=registry,
     )
 
 
@@ -1131,3 +1133,82 @@ class TestAuditResolution:
         assert call_kwargs["request_id"] == "audit-3"
         assert call_kwargs["resolution"] == "timed_out"
         assert call_kwargs["resolved_by"] == "timeout"
+
+
+# ---------------------------------------------------------------------------
+# list_tools tests
+# ---------------------------------------------------------------------------
+
+
+class TestListTools:
+    async def test_list_tools_returns_tool_definitions(self):
+        """list_tools method returns tool definitions from registry."""
+        from agent_gate.config import AuthConfig, ServiceConfig, load_tools_file
+        from agent_gate.registry import build_registry
+
+        tools = load_tools_file("tools/homeassistant.yaml", "homeassistant")
+        svc = ServiceConfig(
+            name="homeassistant",
+            url="http://ha",
+            auth=AuthConfig(type="bearer", token="x"),
+            tools=tools,
+        )
+        registry = build_registry({"homeassistant": svc})
+
+        server = _make_server(registry=registry)
+        ws = MockWebSocket()
+        ws.enqueue(_auth_msg())
+        ws.enqueue({"jsonrpc": "2.0", "method": "list_tools", "params": {}, "id": "lt-1"})
+
+        await server.handle_connection(ws)
+
+        responses = ws.get_responses()
+        lt_resp = [r for r in responses if r.get("id") == "lt-1"]
+        assert len(lt_resp) == 1
+        result = lt_resp[0]["result"]
+        assert "tools" in result
+        tool_names = [t["name"] for t in result["tools"]]
+        assert "ha_get_state" in tool_names
+        assert "ha_call_service" in tool_names
+        # Verify arg schema
+        ha_get_state = next(t for t in result["tools"] if t["name"] == "ha_get_state")
+        assert ha_get_state["args"]["entity_id"]["required"] is True
+
+    async def test_list_tools_no_registry(self):
+        """list_tools returns empty when no registry."""
+        server = _make_server()
+        ws = MockWebSocket()
+        ws.enqueue(_auth_msg())
+        ws.enqueue({"jsonrpc": "2.0", "method": "list_tools", "params": {}, "id": "lt-2"})
+
+        await server.handle_connection(ws)
+
+        responses = ws.get_responses()
+        lt_resp = [r for r in responses if r.get("id") == "lt-2"]
+        assert lt_resp[0]["result"]["tools"] == []
+
+    async def test_list_tools_includes_service_name(self):
+        """list_tools response includes the service name for each tool."""
+        from agent_gate.config import AuthConfig, ServiceConfig, load_tools_file
+        from agent_gate.registry import build_registry
+
+        tools = load_tools_file("tools/homeassistant.yaml", "homeassistant")
+        svc = ServiceConfig(
+            name="homeassistant",
+            url="http://ha",
+            auth=AuthConfig(type="bearer", token="x"),
+            tools=tools,
+        )
+        registry = build_registry({"homeassistant": svc})
+
+        server = _make_server(registry=registry)
+        ws = MockWebSocket()
+        ws.enqueue(_auth_msg())
+        ws.enqueue({"jsonrpc": "2.0", "method": "list_tools", "params": {}, "id": "lt-3"})
+
+        await server.handle_connection(ws)
+
+        responses = ws.get_responses()
+        lt_resp = [r for r in responses if r.get("id") == "lt-3"]
+        for tool in lt_resp[0]["result"]["tools"]:
+            assert tool["service"] == "homeassistant"

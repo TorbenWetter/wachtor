@@ -1,0 +1,51 @@
+tools:
+  ha_get_state:
+    description: "Get entity state from Home Assistant"
+    signature: "{entity_id}"
+    args:
+      entity_id:
+        required: true
+        validate: "^[a-z_][a-z0-9_]*(\\.[a-z0-9_]+)?$"
+    request:
+      method: GET
+      path: "/api/states/{entity_id}"
+
+  ha_get_states:
+    description: "Get all entity states from Home Assistant"
+    request:
+      method: GET
+      path: "/api/states"
+    response:
+      wrap: "states"
+
+  ha_call_service:
+    description: "Call a Home Assistant service"
+    signature: "{domain}.{service}, {entity_id}"
+    args:
+      domain:
+        required: true
+        validate: "^[a-z_][a-z0-9_]*$"
+      service:
+        required: true
+        validate: "^[a-z_][a-z0-9_]*$"
+      entity_id:
+        required: false
+        validate: "^[a-z_][a-z0-9_]*(\\.[a-z0-9_]+)?$"
+    request:
+      method: POST
+      path: "/api/services/{domain}/{service}"
+      body_exclude: [domain, service]
+    response:
+      wrap: "result"
+
+  ha_fire_event:
+    description: "Fire a Home Assistant event"
+    signature: "{event_type}"
+    args:
+      event_type:
+        required: true
+        validate: "^[a-z_][a-z0-9_]*$"
+    request:
+      method: POST
+      path: "/api/events/{event_type}"
+      body_exclude: [event_type]

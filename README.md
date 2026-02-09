@@ -46,14 +46,14 @@ Untrusted Device (Pi)              Trusted Device (Gateway)
 
 ### Security Model
 
-| Property | How |
-|---|---|
-| **Credential isolation** | Service tokens (HA, Telegram bot) live only on the gateway. The agent device never sees them. |
-| **Policy engine** | Every request is matched against YAML permission rules using glob patterns. Deny always wins. |
-| **Human-in-the-loop** | Requests matching `ask` rules trigger a Telegram message with inline approve/deny buttons. |
-| **Transport security** | WSS (TLS) is required by default. Plaintext only with an explicit `--insecure` flag. |
-| **Input validation** | Argument values are sanitized -- glob metacharacters, control characters, and malformed HA identifiers are rejected before processing. |
-| **Rate limiting** | Max 10 pending approvals, max 60 auto-allowed requests per minute. |
+| Property                 | How                                                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Credential isolation** | Service tokens (HA, Telegram bot) live only on the gateway. The agent device never sees them.                                          |
+| **Policy engine**        | Every request is matched against YAML permission rules using glob patterns. Deny always wins.                                          |
+| **Human-in-the-loop**    | Requests matching `ask` rules trigger a Telegram message with inline approve/deny buttons.                                             |
+| **Transport security**   | WSS (TLS) is required by default. Plaintext only with an explicit `--insecure` flag.                                                   |
+| **Input validation**     | Argument values are sanitized -- glob metacharacters, control characters, and malformed HA identifiers are rejected before processing. |
+| **Rate limiting**        | Max 10 pending approvals, max 60 auto-allowed requests per minute.                                                                     |
 
 Even if the agent device is fully compromised, it cannot: access service credentials, forge Telegram approval callbacks, bypass the permission engine, or execute actions directly on Home Assistant.
 
@@ -194,12 +194,12 @@ docker compose down
 
 The `docker-compose.yml` mounts four volumes:
 
-| Mount | Purpose |
-|---|---|
-| `./config.yaml:/app/config.yaml:ro` | Gateway configuration (read-only) |
-| `./permissions.yaml:/app/permissions.yaml:ro` | Permission rules (read-only) |
-| `./data:/app/data` | SQLite database + Telegram persistence |
-| `./certs:/app/certs:ro` | TLS certificates (read-only) |
+| Mount                                         | Purpose                                |
+| --------------------------------------------- | -------------------------------------- |
+| `./config.yaml:/app/config.yaml:ro`           | Gateway configuration (read-only)      |
+| `./permissions.yaml:/app/permissions.yaml:ro` | Permission rules (read-only)           |
+| `./data:/app/data`                            | SQLite database + Telegram persistence |
+| `./certs:/app/certs:ro`                       | TLS certificates (read-only)           |
 
 Secrets are passed via `.env` file (referenced by `env_file: .env` in the compose file):
 
@@ -232,36 +232,36 @@ docker run -d \
 
 ```yaml
 gateway:
-  host: "0.0.0.0"              # Bind address
-  port: 8443                    # Listen port
+  host: "0.0.0.0" # Bind address
+  port: 8443 # Listen port
   tls:
-    cert: "/path/to/cert.pem"  # TLS certificate (required unless --insecure)
-    key: "/path/to/key.pem"    # TLS private key
+    cert: "/path/to/cert.pem" # TLS certificate (required unless --insecure)
+    key: "/path/to/key.pem" # TLS private key
 
 agent:
-  token: "${AGENT_TOKEN}"      # Bearer token for agent authentication
+  token: "${AGENT_TOKEN}" # Bearer token for agent authentication
 
 messenger:
-  type: "telegram"             # Messenger backend (only "telegram" in v1)
+  type: "telegram" # Messenger backend (only "telegram" in v1)
   telegram:
-    token: "${GUARDIAN_BOT_TOKEN}"  # Telegram Bot API token
-    chat_id: 123456789              # Chat ID for approval messages (negative for groups)
-    allowed_users: [123456789]      # Telegram user IDs authorized to approve (required)
+    token: "${GUARDIAN_BOT_TOKEN}" # Telegram Bot API token
+    chat_id: 123456789 # Chat ID for approval messages (negative for groups)
+    allowed_users: [123456789] # Telegram user IDs authorized to approve (required)
 
 services:
   homeassistant:
-    url: "http://homeassistant.local:8123"  # HA base URL
-    token: "${HA_TOKEN}"                     # HA long-lived access token
+    url: "http://homeassistant.local:8123" # HA base URL
+    token: "${HA_TOKEN}" # HA long-lived access token
 
 storage:
-  type: "sqlite"               # Storage backend (only "sqlite" in v1)
+  type: "sqlite" # Storage backend (only "sqlite" in v1)
   path: "./data/agent-gate.db" # Database file path
 
-approval_timeout: 900          # Seconds before pending approvals expire (default: 900 = 15 min)
+approval_timeout: 900 # Seconds before pending approvals expire (default: 900 = 15 min)
 
 rate_limit:
-  max_pending_approvals: 10    # Max simultaneous pending approvals (default: 10)
-  max_requests_per_minute: 60  # Max auto-allowed requests per minute (default: 60)
+  max_pending_approvals: 10 # Max simultaneous pending approvals (default: 10)
+  max_requests_per_minute: 60 # Max auto-allowed requests per minute (default: 60)
 ```
 
 **Environment variable substitution:** Any string value containing `${VAR_NAME}` is replaced with the corresponding environment variable at load time. Missing variables cause a startup error.
@@ -305,12 +305,12 @@ The permission engine evaluates in a strict priority order:
 
 Patterns use `fnmatch` glob syntax. The pattern is matched against a **signature string** built from the tool name and arguments:
 
-| Tool | Signature format | Example |
-|---|---|---|
+| Tool              | Signature format                                   | Example                                         |
+| ----------------- | -------------------------------------------------- | ----------------------------------------------- |
 | `ha_call_service` | `ha_call_service({domain}.{service}, {entity_id})` | `ha_call_service(light.turn_on, light.bedroom)` |
-| `ha_get_state` | `ha_get_state({entity_id})` | `ha_get_state(sensor.living_room_temp)` |
-| `ha_get_states` | `ha_get_states` | `ha_get_states` |
-| `ha_fire_event` | `ha_fire_event({event_type})` | `ha_fire_event(custom_event)` |
+| `ha_get_state`    | `ha_get_state({entity_id})`                        | `ha_get_state(sensor.living_room_temp)`         |
+| `ha_get_states`   | `ha_get_states`                                    | `ha_get_states`                                 |
+| `ha_fire_event`   | `ha_fire_event({event_type})`                      | `ha_fire_event(custom_event)`                   |
 
 ---
 
@@ -405,26 +405,26 @@ After reconnecting, retrieve results for requests that were resolved while the a
 
 ### Error Codes
 
-| Code | Meaning |
-|---|---|
-| `-32700` | Parse error (malformed JSON) |
+| Code     | Meaning                                                             |
+| -------- | ------------------------------------------------------------------- |
+| `-32700` | Parse error (malformed JSON)                                        |
 | `-32600` | Invalid request (missing fields, forbidden characters in arguments) |
-| `-32601` | Method not found |
-| `-32001` | Approval denied by user |
-| `-32002` | Approval timed out |
-| `-32003` | Policy denied (no human involved) |
-| `-32004` | Action execution failed (service error) |
-| `-32005` | Not authenticated |
-| `-32006` | Rate limit exceeded |
+| `-32601` | Method not found                                                    |
+| `-32001` | Approval denied by user                                             |
+| `-32002` | Approval timed out                                                  |
+| `-32003` | Policy denied (no human involved)                                   |
+| `-32004` | Action execution failed (service error)                             |
+| `-32005` | Not authenticated                                                   |
+| `-32006` | Rate limit exceeded                                                 |
 
 ### Available Tools (v1)
 
-| Tool | Description | Args |
-|---|---|---|
-| `ha_get_state` | Get entity state | `entity_id` |
-| `ha_get_states` | Get all entity states | (none) |
-| `ha_call_service` | Call an HA service | `domain`, `service`, `entity_id` |
-| `ha_fire_event` | Fire an HA event | `event_type` |
+| Tool              | Description           | Args                             |
+| ----------------- | --------------------- | -------------------------------- |
+| `ha_get_state`    | Get entity state      | `entity_id`                      |
+| `ha_get_states`   | Get all entity states | (none)                           |
+| `ha_call_service` | Call an HA service    | `domain`, `service`, `entity_id` |
+| `ha_fire_event`   | Fire an HA event      | `event_type`                     |
 
 ---
 

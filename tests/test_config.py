@@ -1,6 +1,7 @@
 """Tests for agent_gate.config — YAML loading, env var substitution, validation."""
 
 import os
+import shutil
 import textwrap
 
 import pytest
@@ -69,7 +70,19 @@ VALID_CONFIG_YAML = textwrap.dedent("""\
     services:
       homeassistant:
         url: "http://ha.local:8123"
-        token: "ha-token"
+        auth:
+          type: bearer
+          token: "ha-token"
+        health:
+          method: GET
+          path: "/api/"
+          expect_status: 200
+        tools: tools/homeassistant.yaml
+        errors:
+          - status: 401
+            message: "Service authentication failed (HA token expired?)"
+          - status: 404
+            message: "Entity not found"
     storage:
       type: "sqlite"
       path: "./data/test.db"
@@ -89,7 +102,17 @@ VALID_PERMISSIONS_YAML = textwrap.dedent("""\
 
 
 @pytest.fixture()
-def config_file(tmp_path):
+def _tools_dir(tmp_path):
+    """Create tools directory in tmp_path with HA tools YAML."""
+    tools_dir = tmp_path / "tools"
+    tools_dir.mkdir()
+    shutil.copy("tools/homeassistant.yaml", tools_dir / "homeassistant.yaml")
+    return tools_dir
+
+
+@pytest.fixture()
+def config_file(tmp_path, _tools_dir):
+    # Write config
     p = tmp_path / "config.yaml"
     p.write_text(VALID_CONFIG_YAML)
     return p
@@ -114,6 +137,8 @@ class TestLoadConfig:
         assert cfg.messenger.telegram.chat_id == -100123
         assert cfg.messenger.telegram.allowed_users == [111, 222]
         assert cfg.services["homeassistant"].url == "http://ha.local:8123"
+        assert cfg.services["homeassistant"].auth.token == "ha-token"
+        assert cfg.services["homeassistant"].auth.type == "bearer"
         assert cfg.storage.type == "sqlite"
         assert cfg.storage.path == "./data/test.db"
 
@@ -126,14 +151,14 @@ class TestLoadConfig:
         assert cfg.rate_limit.max_pending_approvals == 10
         assert cfg.rate_limit.max_requests_per_minute == 60
 
-    def test_custom_approval_timeout(self, tmp_path):
+    def test_custom_approval_timeout(self, tmp_path, _tools_dir):
         yaml_text = VALID_CONFIG_YAML + "approval_timeout: 300\n"
         p = tmp_path / "config.yaml"
         p.write_text(yaml_text)
         cfg = load_config(str(p))
         assert cfg.approval_timeout == 300
 
-    def test_port_string_coerced_to_int(self, tmp_path, monkeypatch):
+    def test_port_string_coerced_to_int(self, tmp_path, _tools_dir, monkeypatch):
         monkeypatch.setenv("MY_PORT", "9999")
         yaml_text = VALID_CONFIG_YAML.replace("port: 8443", 'port: "${MY_PORT}"')
         p = tmp_path / "config.yaml"
@@ -142,7 +167,7 @@ class TestLoadConfig:
         assert cfg.gateway.port == 9999
         assert isinstance(cfg.gateway.port, int)
 
-    def test_chat_id_string_coerced_to_int(self, tmp_path, monkeypatch):
+    def test_chat_id_string_coerced_to_int(self, tmp_path, _tools_dir, monkeypatch):
         monkeypatch.setenv("CHAT_ID", "-100999")
         yaml_text = VALID_CONFIG_YAML.replace("chat_id: -100123", 'chat_id: "${CHAT_ID}"')
         p = tmp_path / "config.yaml"
@@ -151,21 +176,21 @@ class TestLoadConfig:
         assert cfg.messenger.telegram.chat_id == -100999
         assert isinstance(cfg.messenger.telegram.chat_id, int)
 
-    def test_missing_gateway_host(self, tmp_path):
+    def test_missing_gateway_host(self, tmp_path, _tools_dir):
         yaml_text = VALID_CONFIG_YAML.replace('  host: "0.0.0.0"\n', "")
         p = tmp_path / "config.yaml"
         p.write_text(yaml_text)
         with pytest.raises(ConfigError, match=r"gateway\.host"):
             load_config(str(p))
 
-    def test_missing_agent_token(self, tmp_path):
+    def test_missing_agent_token(self, tmp_path, _tools_dir):
         yaml_text = VALID_CONFIG_YAML.replace('token: "test-token"', 'token: ""')
         p = tmp_path / "config.yaml"
         p.write_text(yaml_text)
         with pytest.raises(ConfigError, match=r"agent\.token"):
             load_config(str(p))
 
-    def test_empty_allowed_users(self, tmp_path):
+    def test_empty_allowed_users(self, tmp_path, _tools_dir):
         yaml_text = VALID_CONFIG_YAML.replace("allowed_users: [111, 222]", "allowed_users: []")
         p = tmp_path / "config.yaml"
         p.write_text(yaml_text)
@@ -176,7 +201,7 @@ class TestLoadConfig:
         with pytest.raises(ConfigError, match="not found"):
             load_config("/nonexistent/config.yaml")
 
-    def test_no_tls_config(self, tmp_path):
+    def test_no_tls_config(self, tmp_path, _tools_dir):
         yaml_text = VALID_CONFIG_YAML.replace(
             '  tls:\n    cert: "/path/cert.pem"\n    key: "/path/key.pem"\n', ""
         )
@@ -185,7 +210,7 @@ class TestLoadConfig:
         cfg = load_config(str(p))
         assert cfg.gateway.tls is None
 
-    def test_env_var_in_token(self, tmp_path, monkeypatch):
+    def test_env_var_in_token(self, tmp_path, _tools_dir, monkeypatch):
         monkeypatch.setenv("AGENT_TOKEN", "secret-from-env")
         yaml_text = VALID_CONFIG_YAML.replace('token: "test-token"', 'token: "${AGENT_TOKEN}"', 1)
         p = tmp_path / "config.yaml"
@@ -193,51 +218,174 @@ class TestLoadConfig:
         cfg = load_config(str(p))
         assert cfg.agent.token == "secret-from-env"
 
-    def test_unsupported_messenger_type(self, tmp_path):
+    def test_unsupported_messenger_type(self, tmp_path, _tools_dir):
         yaml_text = VALID_CONFIG_YAML.replace('type: "telegram"', 'type: "slack"')
         p = tmp_path / "config.yaml"
         p.write_text(yaml_text)
         with pytest.raises(ConfigError, match="Unsupported messenger type"):
             load_config(str(p))
 
-    def test_unsupported_storage_type(self, tmp_path):
+    def test_unsupported_storage_type(self, tmp_path, _tools_dir):
         yaml_text = VALID_CONFIG_YAML.replace('type: "sqlite"', 'type: "postgres"')
         p = tmp_path / "config.yaml"
         p.write_text(yaml_text)
         with pytest.raises(ConfigError, match="Unsupported storage type"):
             load_config(str(p))
 
-    def test_negative_approval_timeout(self, tmp_path):
+    def test_negative_approval_timeout(self, tmp_path, _tools_dir):
         yaml_text = VALID_CONFIG_YAML + "approval_timeout: -1\n"
         p = tmp_path / "config.yaml"
         p.write_text(yaml_text)
         with pytest.raises(ConfigError, match="approval_timeout"):
             load_config(str(p))
 
-    def test_zero_approval_timeout(self, tmp_path):
+    def test_zero_approval_timeout(self, tmp_path, _tools_dir):
         yaml_text = VALID_CONFIG_YAML + "approval_timeout: 0\n"
         p = tmp_path / "config.yaml"
         p.write_text(yaml_text)
         with pytest.raises(ConfigError, match="approval_timeout"):
             load_config(str(p))
 
-    def test_missing_homeassistant_service(self, tmp_path):
+    def test_no_services_section(self, tmp_path, _tools_dir):
         yaml_text = VALID_CONFIG_YAML.replace(
-            '  homeassistant:\n    url: "http://ha.local:8123"\n    token: "ha-token"\n',
-            "  other_service: {}\n",
+            "services:\n"
+            "  homeassistant:\n"
+            '    url: "http://ha.local:8123"\n'
+            "    auth:\n"
+            "      type: bearer\n"
+            '      token: "ha-token"\n'
+            "    health:\n"
+            "      method: GET\n"
+            '      path: "/api/"\n'
+            "      expect_status: 200\n"
+            "    tools: tools/homeassistant.yaml\n"
+            "    errors:\n"
+            "      - status: 401\n"
+            '        message: "Service authentication failed (HA token expired?)"\n'
+            "      - status: 404\n"
+            '        message: "Entity not found"\n',
+            "",
         )
         p = tmp_path / "config.yaml"
         p.write_text(yaml_text)
-        with pytest.raises(ConfigError, match=r"services\.homeassistant"):
+        with pytest.raises(ConfigError, match=r"services"):
             load_config(str(p))
 
-    def test_env_var_in_ha_token(self, tmp_path, monkeypatch):
+    def test_env_var_in_ha_token(self, tmp_path, _tools_dir, monkeypatch):
         monkeypatch.setenv("HA_TOKEN", "ha-secret-from-env")
         yaml_text = VALID_CONFIG_YAML.replace('token: "ha-token"', 'token: "${HA_TOKEN}"')
         p = tmp_path / "config.yaml"
         p.write_text(yaml_text)
         cfg = load_config(str(p))
-        assert cfg.services["homeassistant"].token == "ha-secret-from-env"
+        assert cfg.services["homeassistant"].auth.token == "ha-secret-from-env"
+
+    def test_service_auth_parsed(self, config_file):
+        """Auth config fields are parsed correctly."""
+        cfg = load_config(str(config_file))
+        auth = cfg.services["homeassistant"].auth
+        assert auth.type == "bearer"
+        assert auth.token == "ha-token"
+
+    def test_service_health_parsed(self, config_file):
+        """Health check config fields are parsed correctly."""
+        cfg = load_config(str(config_file))
+        health = cfg.services["homeassistant"].health
+        assert health.method == "GET"
+        assert health.path == "/api/"
+        assert health.expect_status == 200
+
+    def test_service_tools_loaded(self, config_file):
+        """Tools list is populated from the YAML file."""
+        cfg = load_config(str(config_file))
+        svc = cfg.services["homeassistant"]
+        tool_names = [t.name for t in svc.tools]
+        assert "ha_get_state" in tool_names
+        assert "ha_call_service" in tool_names
+        assert "ha_fire_event" in tool_names
+
+    def test_service_errors_parsed(self, config_file):
+        """Error mappings are parsed correctly."""
+        cfg = load_config(str(config_file))
+        errors = cfg.services["homeassistant"].errors
+        assert len(errors) == 2
+        assert errors[0].status == 401
+        assert "authentication" in errors[0].message.lower()
+        assert errors[1].status == 404
+
+    def test_multiple_services(self, tmp_path, _tools_dir):
+        """Multiple services in config are all loaded."""
+        # Insert weather service inside the services block (before storage)
+        weather_service = (
+            "  weather:\n"
+            '    url: "http://weather.local:5000"\n'
+            "    auth:\n"
+            "      type: header\n"
+            '      token: "weather-key"\n'
+            '      header_name: "X-Api-Key"\n'
+        )
+        yaml_text = VALID_CONFIG_YAML.replace(
+            "storage:\n",
+            weather_service + "storage:\n",
+        )
+        p = tmp_path / "config.yaml"
+        p.write_text(yaml_text)
+        cfg = load_config(str(p))
+        assert "homeassistant" in cfg.services
+        assert "weather" in cfg.services
+        assert cfg.services["weather"].url == "http://weather.local:5000"
+        assert cfg.services["weather"].auth.type == "header"
+        assert cfg.services["weather"].auth.header_name == "X-Api-Key"
+
+    def test_service_not_a_mapping(self, tmp_path, _tools_dir):
+        """Non-mapping service value raises ConfigError."""
+        yaml_text = VALID_CONFIG_YAML.replace(
+            "  homeassistant:\n"
+            '    url: "http://ha.local:8123"\n'
+            "    auth:\n"
+            "      type: bearer\n"
+            '      token: "ha-token"\n'
+            "    health:\n"
+            "      method: GET\n"
+            '      path: "/api/"\n'
+            "      expect_status: 200\n"
+            "    tools: tools/homeassistant.yaml\n"
+            "    errors:\n"
+            "      - status: 401\n"
+            '        message: "Service authentication failed (HA token expired?)"\n'
+            "      - status: 404\n"
+            '        message: "Entity not found"\n',
+            "  homeassistant: not-a-mapping\n",
+        )
+        p = tmp_path / "config.yaml"
+        p.write_text(yaml_text)
+        with pytest.raises(ConfigError, match="must be a mapping"):
+            load_config(str(p))
+
+    def test_empty_services_dict(self, tmp_path, _tools_dir):
+        """Empty services dict raises ConfigError."""
+        yaml_text = VALID_CONFIG_YAML.replace(
+            "  homeassistant:\n"
+            '    url: "http://ha.local:8123"\n'
+            "    auth:\n"
+            "      type: bearer\n"
+            '      token: "ha-token"\n'
+            "    health:\n"
+            "      method: GET\n"
+            '      path: "/api/"\n'
+            "      expect_status: 200\n"
+            "    tools: tools/homeassistant.yaml\n"
+            "    errors:\n"
+            "      - status: 401\n"
+            '        message: "Service authentication failed (HA token expired?)"\n'
+            "      - status: 404\n"
+            '        message: "Entity not found"\n',
+            "",
+        )
+        # The YAML now has "services:" with nothing under it
+        p = tmp_path / "config.yaml"
+        p.write_text(yaml_text)
+        with pytest.raises(ConfigError):
+            load_config(str(p))
 
 
 class TestLoadPermissions:

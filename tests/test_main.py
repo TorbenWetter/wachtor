@@ -163,7 +163,8 @@ class TestRunTlsCheck:
             patch(f"{_PATCH_PREFIX}.load_config", return_value=mock_config),
             patch(f"{_PATCH_PREFIX}.load_permissions", return_value=_make_mock_permissions()),
             patch(f"{_PATCH_PREFIX}.Database", return_value=mock_db),
-            patch(f"{_PATCH_PREFIX}.HomeAssistantService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.GenericHTTPService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.build_registry", return_value=MagicMock()),
             patch(f"{_PATCH_PREFIX}.TelegramAdapter", return_value=mock_telegram),
             patch(f"{_PATCH_PREFIX}.GatewayServer", return_value=mock_gateway),
             patch(f"{_PATCH_PREFIX}.websockets.asyncio.server.serve", return_value=mock_ws_cm),
@@ -243,7 +244,8 @@ class TestRunStartupSequence:
             patch(f"{_PATCH_PREFIX}.load_config", return_value=mock_config),
             patch(f"{_PATCH_PREFIX}.load_permissions", return_value=_make_mock_permissions()),
             patch(f"{_PATCH_PREFIX}.Database", return_value=mock_db),
-            patch(f"{_PATCH_PREFIX}.HomeAssistantService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.GenericHTTPService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.build_registry", return_value=MagicMock()),
             patch(f"{_PATCH_PREFIX}.TelegramAdapter", return_value=mock_telegram),
             patch(f"{_PATCH_PREFIX}.GatewayServer", return_value=mock_gateway),
             patch(f"{_PATCH_PREFIX}.websockets.asyncio.server.serve", return_value=mock_ws_cm),
@@ -286,7 +288,8 @@ class TestRunStartupSequence:
             patch(f"{_PATCH_PREFIX}.load_config", return_value=mock_config),
             patch(f"{_PATCH_PREFIX}.load_permissions", return_value=_make_mock_permissions()),
             patch(f"{_PATCH_PREFIX}.Database", return_value=mock_db),
-            patch(f"{_PATCH_PREFIX}.HomeAssistantService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.GenericHTTPService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.build_registry", return_value=MagicMock()),
             patch(f"{_PATCH_PREFIX}.TelegramAdapter", return_value=mock_telegram),
             patch(f"{_PATCH_PREFIX}.GatewayServer", return_value=mock_gateway),
             patch(f"{_PATCH_PREFIX}.websockets.asyncio.server.serve", return_value=mock_ws_cm),
@@ -330,7 +333,8 @@ class TestRunHealthCheck:
             patch(f"{_PATCH_PREFIX}.load_config", return_value=mock_config),
             patch(f"{_PATCH_PREFIX}.load_permissions", return_value=_make_mock_permissions()),
             patch(f"{_PATCH_PREFIX}.Database", return_value=mock_db),
-            patch(f"{_PATCH_PREFIX}.HomeAssistantService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.GenericHTTPService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.build_registry", return_value=MagicMock()),
             patch(f"{_PATCH_PREFIX}.TelegramAdapter", return_value=mock_telegram),
             patch(f"{_PATCH_PREFIX}.GatewayServer", return_value=mock_gateway),
             patch(f"{_PATCH_PREFIX}.websockets.asyncio.server.serve", return_value=mock_ws_cm),
@@ -373,7 +377,8 @@ class TestRunHealthCheck:
             patch(f"{_PATCH_PREFIX}.load_config", return_value=mock_config),
             patch(f"{_PATCH_PREFIX}.load_permissions", return_value=_make_mock_permissions()),
             patch(f"{_PATCH_PREFIX}.Database", return_value=mock_db),
-            patch(f"{_PATCH_PREFIX}.HomeAssistantService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.GenericHTTPService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.build_registry", return_value=MagicMock()),
             patch(f"{_PATCH_PREFIX}.TelegramAdapter", return_value=mock_telegram),
             patch(f"{_PATCH_PREFIX}.GatewayServer", return_value=mock_gateway),
             patch(f"{_PATCH_PREFIX}.websockets.asyncio.server.serve", return_value=mock_ws_cm),
@@ -418,7 +423,8 @@ class TestRunShutdownSequence:
             patch(f"{_PATCH_PREFIX}.load_config", return_value=mock_config),
             patch(f"{_PATCH_PREFIX}.load_permissions", return_value=_make_mock_permissions()),
             patch(f"{_PATCH_PREFIX}.Database", return_value=mock_db),
-            patch(f"{_PATCH_PREFIX}.HomeAssistantService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.GenericHTTPService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.build_registry", return_value=MagicMock()),
             patch(f"{_PATCH_PREFIX}.TelegramAdapter", return_value=mock_telegram),
             patch(f"{_PATCH_PREFIX}.GatewayServer", return_value=mock_gateway),
             patch(f"{_PATCH_PREFIX}.websockets.asyncio.server.serve", return_value=mock_ws_cm),
@@ -475,7 +481,8 @@ class TestRunSignalHandling:
             patch(f"{_PATCH_PREFIX}.load_config", return_value=mock_config),
             patch(f"{_PATCH_PREFIX}.load_permissions", return_value=_make_mock_permissions()),
             patch(f"{_PATCH_PREFIX}.Database", return_value=mock_db),
-            patch(f"{_PATCH_PREFIX}.HomeAssistantService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.GenericHTTPService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.build_registry", return_value=MagicMock()),
             patch(f"{_PATCH_PREFIX}.TelegramAdapter", return_value=mock_telegram),
             patch(f"{_PATCH_PREFIX}.GatewayServer", return_value=mock_gateway),
             patch(f"{_PATCH_PREFIX}.websockets.asyncio.server.serve", return_value=mock_ws_cm),
@@ -520,7 +527,8 @@ class TestRunPtbLifecycle:
             patch(f"{_PATCH_PREFIX}.load_config", return_value=mock_config),
             patch(f"{_PATCH_PREFIX}.load_permissions", return_value=_make_mock_permissions()),
             patch(f"{_PATCH_PREFIX}.Database", return_value=mock_db),
-            patch(f"{_PATCH_PREFIX}.HomeAssistantService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.GenericHTTPService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.build_registry", return_value=MagicMock()),
             patch(f"{_PATCH_PREFIX}.TelegramAdapter", return_value=mock_telegram),
             patch(f"{_PATCH_PREFIX}.GatewayServer", return_value=mock_gateway),
             patch(f"{_PATCH_PREFIX}.websockets.asyncio.server.serve", return_value=mock_ws_cm),
@@ -581,7 +589,8 @@ class TestRunTlsContext:
             patch(f"{_PATCH_PREFIX}.load_config", return_value=mock_config),
             patch(f"{_PATCH_PREFIX}.load_permissions", return_value=_make_mock_permissions()),
             patch(f"{_PATCH_PREFIX}.Database", return_value=mock_db),
-            patch(f"{_PATCH_PREFIX}.HomeAssistantService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.GenericHTTPService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.build_registry", return_value=MagicMock()),
             patch(f"{_PATCH_PREFIX}.TelegramAdapter", return_value=mock_telegram),
             patch(f"{_PATCH_PREFIX}.GatewayServer", return_value=mock_gateway),
             patch(f"{_PATCH_PREFIX}.websockets.asyncio.server.serve", mock_serve),
@@ -635,7 +644,8 @@ class TestRunTokenNeverLogged:
             patch(f"{_PATCH_PREFIX}.load_config", return_value=mock_config),
             patch(f"{_PATCH_PREFIX}.load_permissions", return_value=_make_mock_permissions()),
             patch(f"{_PATCH_PREFIX}.Database", return_value=mock_db),
-            patch(f"{_PATCH_PREFIX}.HomeAssistantService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.GenericHTTPService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.build_registry", return_value=MagicMock()),
             patch(f"{_PATCH_PREFIX}.TelegramAdapter", return_value=mock_telegram),
             patch(f"{_PATCH_PREFIX}.GatewayServer", return_value=mock_gateway),
             patch(f"{_PATCH_PREFIX}.websockets.asyncio.server.serve", return_value=mock_ws_cm),
@@ -687,7 +697,8 @@ class TestRunGatewayServerWiring:
             patch(f"{_PATCH_PREFIX}.load_config", return_value=mock_config),
             patch(f"{_PATCH_PREFIX}.load_permissions", return_value=mock_permissions),
             patch(f"{_PATCH_PREFIX}.Database", return_value=mock_db),
-            patch(f"{_PATCH_PREFIX}.HomeAssistantService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.GenericHTTPService", return_value=mock_ha),
+            patch(f"{_PATCH_PREFIX}.build_registry", return_value=MagicMock()),
             patch(f"{_PATCH_PREFIX}.TelegramAdapter", return_value=mock_telegram),
             patch(f"{_PATCH_PREFIX}.GatewayServer", mock_gateway_cls),
             patch(f"{_PATCH_PREFIX}.PermissionEngine", mock_engine_cls),
@@ -707,6 +718,7 @@ class TestRunGatewayServerWiring:
         assert kwargs["db"] == mock_db
         assert kwargs["approval_timeout"] == mock_config.approval_timeout
         assert kwargs["rate_limit_config"] == mock_config.rate_limit
+        assert "registry" in kwargs  # Registry is now passed to GatewayServer
 
 
 class TestMain:
@@ -716,8 +728,10 @@ class TestMain:
         """main() catches ConfigError and exits with code 1."""
         from agent_gate.__main__ import main
 
+        mock_args = argparse.Namespace(command="serve")
+
         with (
-            patch(f"{_PATCH_PREFIX}.parse_args"),
+            patch(f"{_PATCH_PREFIX}.parse_args", return_value=mock_args),
             patch(f"{_PATCH_PREFIX}.asyncio.run") as mock_run,
             patch(f"{_PATCH_PREFIX}.sys") as mock_sys,
         ):
@@ -730,3 +744,80 @@ class TestMain:
                 main(["--insecure"])
 
             mock_sys.exit.assert_called_once_with(1)
+
+
+# ---------------------------------------------------------------------------
+# Subcommand parsing tests
+# ---------------------------------------------------------------------------
+
+
+class TestParseArgsSubcommands:
+    """Tests for subcommand routing in parse_args()."""
+
+    def test_serve_subcommand_explicit(self):
+        """Explicit 'serve' subcommand is recognized."""
+        from agent_gate.__main__ import parse_args
+
+        args = parse_args(["serve", "--insecure"])
+        assert args.command == "serve"
+        assert args.insecure is True
+
+    def test_no_subcommand_defaults_to_serve(self):
+        """No subcommand defaults to 'serve'."""
+        from agent_gate.__main__ import parse_args
+
+        args = parse_args([])
+        assert args.command == "serve"
+        assert args.insecure is False
+        assert args.config == "config.yaml"
+        assert args.permissions == "permissions.yaml"
+
+    def test_no_subcommand_with_flags(self):
+        """Flags without subcommand still route to 'serve'."""
+        from agent_gate.__main__ import parse_args
+
+        args = parse_args(["--insecure"])
+        assert args.command == "serve"
+        assert args.insecure is True
+
+    def test_request_subcommand(self):
+        """'request' subcommand parses tool and args."""
+        from agent_gate.__main__ import parse_args
+
+        args = parse_args(["request", "ha_get_state", "entity_id=sensor.temp"])
+        assert args.command == "request"
+        assert args.tool == "ha_get_state"
+        assert args.args == ["entity_id=sensor.temp"]
+
+    def test_request_with_url_and_token(self):
+        """'request' subcommand parses --url and --token."""
+        from agent_gate.__main__ import parse_args
+
+        args = parse_args(
+            [
+                "request",
+                "ha_get_state",
+                "--url",
+                "wss://gw:8443",
+                "--token",
+                "my-token",
+            ]
+        )
+        assert args.command == "request"
+        assert args.url == "wss://gw:8443"
+        assert args.token == "my-token"
+
+    def test_tools_subcommand(self):
+        """'tools' subcommand parses --url."""
+        from agent_gate.__main__ import parse_args
+
+        args = parse_args(["tools", "--url", "wss://gw:8443"])
+        assert args.command == "tools"
+        assert args.url == "wss://gw:8443"
+
+    def test_pending_subcommand(self):
+        """'pending' subcommand is recognized."""
+        from agent_gate.__main__ import parse_args
+
+        args = parse_args(["pending"])
+        assert args.command == "pending"

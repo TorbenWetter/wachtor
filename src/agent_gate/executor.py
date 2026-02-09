@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from agent_gate.services.base import ServiceHandler
 
-# Explicit tool-to-service mapping
-TOOL_SERVICE_MAP: dict[str, str] = {
-    "ha_get_state": "homeassistant",
-    "ha_get_states": "homeassistant",
-    "ha_call_service": "homeassistant",
-    "ha_fire_event": "homeassistant",
-}
+if TYPE_CHECKING:
+    from agent_gate.registry import ToolRegistry
 
 
 class ExecutionError(Exception):
@@ -22,12 +17,20 @@ class ExecutionError(Exception):
 class Executor:
     """Routes approved tool requests to service handlers."""
 
-    def __init__(self, services: dict[str, ServiceHandler]) -> None:
+    def __init__(
+        self,
+        services: dict[str, ServiceHandler],
+        registry: ToolRegistry | None = None,
+    ) -> None:
         self._services = services
+        self._registry = registry
 
     async def execute(self, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
         """Dispatch a tool request to the appropriate service handler."""
-        service_name = TOOL_SERVICE_MAP.get(tool_name)
+        service_name = None
+        if self._registry:
+            service_name = self._registry.get_service_name(tool_name)
+
         if service_name is None:
             raise ExecutionError(f"Unknown tool: {tool_name}")
         handler = self._services.get(service_name)

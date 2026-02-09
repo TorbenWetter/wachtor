@@ -7,9 +7,12 @@ import json
 import logging
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from websockets.exceptions import ConnectionClosed
+
+if TYPE_CHECKING:
+    from agent_gate.registry import ToolRegistry
 
 from agent_gate.db import Database
 from agent_gate.engine import PermissionEngine, build_signature, validate_args
@@ -74,6 +77,7 @@ class GatewayServer:
         db: Database,
         approval_timeout: int = 900,
         rate_limit_config: Any = None,
+        registry: ToolRegistry | None = None,
     ) -> None:
         self._agent_token = agent_token
         self._engine = engine
@@ -81,6 +85,7 @@ class GatewayServer:
         self._messenger = messenger
         self._db = db
         self._approval_timeout = approval_timeout
+        self._registry = registry
         self._rate_limiter = RateLimiter(
             rate_limit_config.max_requests_per_minute if rate_limit_config else 60
         )
@@ -176,6 +181,8 @@ class GatewayServer:
             await self._handle_tool_request(websocket, msg, msg_id)
         elif method == "get_pending_results":
             await self._handle_get_pending_results(websocket, msg_id)
+        elif method == "list_tools":
+            await self._handle_list_tools(websocket, msg_id)
         else:
             await self._send_error(websocket, METHOD_NOT_FOUND, f"Unknown method: {method}", msg_id)
 
@@ -420,6 +427,32 @@ class GatewayServer:
         if results:
             request_ids = [r["request_id"] for r in results]
             await self._db.delete_completed_results(request_ids)
+
+    async def _handle_list_tools(self, websocket: Any, msg_id: Any) -> None:
+        """Return available tool definitions."""
+        if self._registry is None:
+            await self._send_result(websocket, {"tools": []}, msg_id)
+            return
+
+        tools = []
+        for tool_def in self._registry.all_tools():
+            args_schema: dict[str, dict[str, Any]] = {}
+            for arg_name, arg_def in tool_def.args.items():
+                arg_info: dict[str, Any] = {"required": arg_def.required}
+                if arg_def.validate:
+                    arg_info["validate"] = arg_def.validate
+                args_schema[arg_name] = arg_info
+
+            tools.append(
+                {
+                    "name": tool_def.name,
+                    "description": tool_def.description,
+                    "service": tool_def.service_name,
+                    "args": args_schema,
+                }
+            )
+
+        await self._send_result(websocket, {"tools": tools}, msg_id)
 
     async def resolve_all_pending(self, reason: str = "gateway_shutdown") -> None:
         """Resolve all pending approvals (called during shutdown)."""

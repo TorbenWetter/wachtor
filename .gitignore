@@ -26,6 +26,10 @@ data/
 *.db
 *.pickle
 
+# Runtime config (contains secrets)
+config.yaml
+permissions.yaml
+
 # TLS certs (local dev)
 certs/
 

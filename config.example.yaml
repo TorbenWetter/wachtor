@@ -21,7 +21,38 @@ messenger:
 services:
   homeassistant:
     url: "http://homeassistant.local:8123"
-    token: "${HA_TOKEN}"
+    auth:
+      type: bearer
+      token: "${HA_TOKEN}"
+    health:
+      method: GET
+      path: "/api/"
+      expect_status: 200
+    tools: "tools/homeassistant.yaml"
+    errors:
+      - status: 401
+        message: "Authentication failed (HA token expired?)"
+      - status: 404
+        message: "Entity not found: {body}"
+
+  # Example: adding another HTTP API service
+  # my_api:
+  #   url: "https://api.example.com"
+  #   auth:
+  #     type: header
+  #     header_name: "X-API-Key"
+  #     token: "${MY_API_KEY}"
+  #   tools: "tools/my_api.yaml"
+
+  # Example: Python plugin service (non-HTTP)
+  # custom:
+  #   url: "mqtt://broker.local"
+  #   auth:
+  #     type: bearer
+  #     token: "${MQTT_TOKEN}"
+  #   handler: python
+  #   handler_class: "my_plugin:MQTTService"
+  #   tools: "tools/custom.yaml"
 
 storage:
   type: "sqlite"

@@ -18,7 +18,13 @@ import pytest
 import websockets.asyncio.server
 
 from agent_gate.client import AgentGateClient, AgentGateDenied
-from agent_gate.config import PermissionRule, Permissions
+from agent_gate.config import (
+    AuthConfig,
+    PermissionRule,
+    Permissions,
+    ServiceConfig,
+    load_tools_file,
+)
 from agent_gate.db import Database
 from agent_gate.engine import PermissionEngine
 from agent_gate.executor import ExecutionError, Executor
@@ -28,6 +34,7 @@ from agent_gate.messenger.base import (
     ApprovalResult,
     MessengerAdapter,
 )
+from agent_gate.registry import build_registry
 from agent_gate.server import GatewayServer
 from agent_gate.services.base import ServiceHandler
 
@@ -120,9 +127,19 @@ async def gateway_env() -> AsyncIterator[tuple[str, MockMessenger, GatewayServer
         db = Database(db_path)
         await db.initialize()
 
+        # Build registry from HA tools YAML
+        tools = load_tools_file("tools/homeassistant.yaml", "homeassistant")
+        svc_config = ServiceConfig(
+            name="homeassistant",
+            url="http://ha",
+            auth=AuthConfig(type="bearer", token="x"),
+            tools=tools,
+        )
+        registry = build_registry({"homeassistant": svc_config})
+
         # Mock services
         ha = MockHAService()
-        executor = Executor({"homeassistant": ha})
+        executor = Executor({"homeassistant": ha}, registry)
         messenger = MockMessenger()
 
         # Permission rules:
@@ -138,7 +155,7 @@ async def gateway_env() -> AsyncIterator[tuple[str, MockMessenger, GatewayServer
                 PermissionRule(pattern="ha_call_service(lock.*)", action="deny"),
             ],
         )
-        engine = PermissionEngine(permissions)
+        engine = PermissionEngine(permissions, registry=registry)
 
         gateway = GatewayServer(
             agent_token=TOKEN,
@@ -147,6 +164,7 @@ async def gateway_env() -> AsyncIterator[tuple[str, MockMessenger, GatewayServer
             messenger=messenger,
             db=db,
             approval_timeout=60,
+            registry=registry,
         )
 
         # Wire approval callback

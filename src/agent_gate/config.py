@@ -74,12 +74,6 @@ class MessengerConfig:
 
 
 @dataclass
-class HomeAssistantConfig:
-    url: str
-    token: str
-
-
-@dataclass
 class StorageConfig:
     type: str
     path: str
@@ -96,10 +90,78 @@ class Config:
     gateway: GatewayConfig
     agent: AgentConfig
     messenger: MessengerConfig
-    services: dict[str, HomeAssistantConfig]
+    services: dict[str, ServiceConfig]
     storage: StorageConfig
     approval_timeout: int = 900
     rate_limit: RateLimitConfig = field(default_factory=RateLimitConfig)
+
+
+# --- Tool / Service dataclasses (extensible tools) ---
+
+
+@dataclass
+class ArgDefinition:
+    required: bool = False
+    validate: str | None = None  # regex pattern string
+
+
+@dataclass
+class RequestDefinition:
+    method: str  # GET, POST, PUT, DELETE, PATCH
+    path: str  # "/api/states/{entity_id}"
+    body_exclude: list[str] | None = None
+
+
+@dataclass
+class ResponseDefinition:
+    wrap: str | None = None  # wrap response in {wrap: data}
+
+
+@dataclass
+class ToolDefinition:
+    name: str
+    service_name: str
+    description: str = ""
+    signature: str = ""  # "{domain}.{service}, {entity_id}"
+    args: dict[str, ArgDefinition] = field(default_factory=dict)
+    request: RequestDefinition | None = None
+    response: ResponseDefinition | None = None
+
+
+@dataclass
+class AuthConfig:
+    type: str  # bearer, header, query, basic
+    token: str = ""
+    header_name: str = ""  # for type=header
+    query_param: str = ""  # for type=query
+    username: str = ""  # for type=basic
+    password: str = ""  # for type=basic
+
+
+@dataclass
+class HealthCheckConfig:
+    method: str = "GET"
+    path: str = "/"
+    expect_status: int = 200
+
+
+@dataclass
+class ErrorMapping:
+    status: int
+    message: str  # supports {status}, {body} templates
+
+
+@dataclass
+class ServiceConfig:
+    name: str
+    url: str
+    auth: AuthConfig
+    handler: str = "http"
+    handler_class: str = ""
+    health: HealthCheckConfig = field(default_factory=HealthCheckConfig)
+    tools_file: str = ""
+    tools: list[ToolDefinition] = field(default_factory=list)
+    errors: list[ErrorMapping] = field(default_factory=list)
 
 
 # --- Permission dataclasses ---
@@ -199,12 +261,77 @@ def load_config(path: str = "config.yaml") -> Config:
 
     # Services
     svc_raw = _require(raw, "services", "")
-    services: dict[str, HomeAssistantConfig] = {}
-    ha_raw = _require(svc_raw, "homeassistant", "services")
-    services["homeassistant"] = HomeAssistantConfig(
-        url=_require(ha_raw, "url", "services.homeassistant"),
-        token=_require(ha_raw, "token", "services.homeassistant"),
-    )
+    services: dict[str, ServiceConfig] = {}
+    for svc_name, svc_data in svc_raw.items():
+        if not isinstance(svc_data, dict):
+            raise ConfigError(f"Service '{svc_name}' must be a mapping")
+        url = _require(svc_data, "url", f"services.{svc_name}")
+
+        # Parse auth
+        auth_raw = _require(svc_data, "auth", f"services.{svc_name}")
+        auth_type = _require(auth_raw, "type", f"services.{svc_name}.auth")
+        auth = AuthConfig(
+            type=auth_type,
+            token=auth_raw.get("token", ""),
+            header_name=auth_raw.get("header_name", ""),
+            query_param=auth_raw.get("query_param", ""),
+            username=auth_raw.get("username", ""),
+            password=auth_raw.get("password", ""),
+        )
+
+        # Parse health check
+        health_raw = svc_data.get("health", {})
+        health = HealthCheckConfig(
+            method=health_raw.get("method", "GET"),
+            path=health_raw.get("path", "/"),
+            expect_status=_coerce_int(
+                health_raw.get("expect_status", 200),
+                f"services.{svc_name}.health.expect_status",
+            ),
+        )
+
+        # Parse errors
+        errors = []
+        for i, err in enumerate(svc_data.get("errors", [])):
+            if not isinstance(err, dict):
+                raise ConfigError(f"services.{svc_name}.errors[{i}] must be a mapping")
+            if "status" not in err:
+                raise ConfigError(
+                    f"Missing required key 'status' in services.{svc_name}.errors[{i}]"
+                )
+            if "message" not in err:
+                raise ConfigError(
+                    f"Missing required key 'message' in services.{svc_name}.errors[{i}]"
+                )
+            errors.append(
+                ErrorMapping(
+                    status=_coerce_int(err["status"], f"services.{svc_name}.errors[{i}].status"),
+                    message=err["message"],
+                )
+            )
+
+        # Load tools
+        tools_file = svc_data.get("tools", "")
+        tools: list[ToolDefinition] = []
+        if tools_file:
+            config_dir = Path(path).parent
+            tools_path = str(config_dir / tools_file)
+            tools = load_tools_file(tools_path, svc_name)
+
+        services[svc_name] = ServiceConfig(
+            name=svc_name,
+            url=url,
+            auth=auth,
+            handler=svc_data.get("handler", "http"),
+            handler_class=svc_data.get("handler_class", ""),
+            health=health,
+            tools_file=tools_file,
+            tools=tools,
+            errors=errors,
+        )
+
+    if not services:
+        raise ConfigError("At least one service must be configured")
 
     # Storage
     stor_raw = _require(raw, "storage", "")
@@ -277,3 +404,85 @@ def load_permissions(path: str = "permissions.yaml") -> Permissions:
         )
 
     return Permissions(defaults=defaults, rules=rules)
+
+
+def load_tools_file(path: str, service_name: str) -> list[ToolDefinition]:
+    """Load and parse a tools YAML file, returning typed ToolDefinition objects.
+
+    - Reads YAML file
+    - Runs substitute_env_vars() on it
+    - Validates each tool entry
+    - Compiles validation regexes at load time (raise ConfigError if invalid)
+    - Returns list of ToolDefinition objects
+    """
+    p = Path(path)
+    if not p.exists():
+        raise ConfigError(f"Tools file not found: {path}")
+
+    with open(p) as f:
+        raw = yaml.safe_load(f)
+
+    if raw is None:
+        return []
+
+    raw = substitute_env_vars(raw)
+
+    tools_raw = raw.get("tools")
+    if not tools_raw:
+        return []
+
+    result: list[ToolDefinition] = []
+    for tool_name, tool_data in tools_raw.items():
+        if tool_data is None:
+            tool_data = {}
+
+        # Parse args
+        args: dict[str, ArgDefinition] = {}
+        for arg_name, arg_data in (tool_data.get("args") or {}).items():
+            if arg_data is None:
+                arg_data = {}
+            validate = arg_data.get("validate")
+            if validate is not None:
+                # Compile regex at load time to catch errors early
+                try:
+                    re.compile(validate)
+                except re.error as e:
+                    raise ConfigError(
+                        f"Invalid regex pattern for tool '{tool_name}' arg '{arg_name}': {e}"
+                    ) from None
+            args[arg_name] = ArgDefinition(
+                required=bool(arg_data.get("required", False)),
+                validate=validate,
+            )
+
+        # Parse request
+        request: RequestDefinition | None = None
+        req_raw = tool_data.get("request")
+        if req_raw is not None:
+            request = RequestDefinition(
+                method=req_raw.get("method", "GET"),
+                path=req_raw.get("path", "/"),
+                body_exclude=req_raw.get("body_exclude"),
+            )
+
+        # Parse response
+        response: ResponseDefinition | None = None
+        resp_raw = tool_data.get("response")
+        if resp_raw is not None:
+            response = ResponseDefinition(
+                wrap=resp_raw.get("wrap"),
+            )
+
+        result.append(
+            ToolDefinition(
+                name=tool_name,
+                service_name=service_name,
+                description=tool_data.get("description", ""),
+                signature=tool_data.get("signature", ""),
+                args=args,
+                request=request,
+                response=response,
+            )
+        )
+
+    return result

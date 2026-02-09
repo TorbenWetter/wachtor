@@ -101,6 +101,29 @@ class AgentGateClient:
         result = await future
         return result.get("data")
 
+    async def list_tools(self, timeout: float = 10) -> list:
+        """Retrieve available tools from the gateway."""
+        request_id = self._next_id()
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        self._pending[request_id] = future
+
+        if not self._connected.is_set():
+            await self._connected.wait()
+
+        await self._ws.send(
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "list_tools",
+                    "params": {},
+                    "id": request_id,
+                }
+            )
+        )
+
+        result = await asyncio.wait_for(future, timeout=timeout)
+        return result.get("tools", [])
+
     async def get_pending_results(self) -> list:
         """Retrieve results for requests resolved while disconnected."""
         request_id = self._next_id()
