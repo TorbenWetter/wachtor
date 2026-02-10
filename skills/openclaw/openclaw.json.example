@@ -1,0 +1,13 @@
+{
+  "skills": {
+    "entries": {
+      "agentpass": {
+        "enabled": true,
+        "env": {
+          "AGENTPASS_URL": "wss://your-gateway-host:8443",
+          "AGENT_TOKEN": "your-agent-token-here"
+        }
+      }
+    }
+  }
+}

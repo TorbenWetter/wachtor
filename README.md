@@ -213,6 +213,70 @@ Auto-reconnects with exponential backoff (1s to 30s). Limit retries with `max_re
 
 ---
 
+## OpenClaw Integration
+
+agentpass ships with an [OpenClaw](https://github.com/openclaw/openclaw) skill that teaches the agent to control Home Assistant devices through the gateway. The skill is available on [ClawHub](https://clawhub.ai/) and as a bundled `SKILL.md` in this repo.
+
+### Install from ClawHub
+
+```bash
+clawhub install agentpass
+```
+
+### Manual install
+
+Copy the skill directory to your OpenClaw skills folder:
+
+```bash
+cp -r skills/openclaw ~/.openclaw/skills/agentpass
+```
+
+Or on a remote device (e.g., a Raspberry Pi running OpenClaw):
+
+```bash
+scp -r skills/openclaw user@agent-device:~/.openclaw/skills/agentpass
+```
+
+### Configure environment variables
+
+Add the gateway URL and agent token to `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "skills": {
+    "entries": {
+      "agentpass": {
+        "enabled": true,
+        "env": {
+          "AGENTPASS_URL": "wss://your-gateway-host:8443",
+          "AGENT_TOKEN": "your-agent-token-here"
+        }
+      }
+    }
+  }
+}
+```
+
+If the file already exists, merge the `agentpass` entry into `skills.entries`.
+
+### Install the CLI on the agent device
+
+The agent device needs the `agentpass` CLI. On systems with externally-managed Python environments (e.g., Raspberry Pi OS), use `pipx`:
+
+```bash
+pipx install agentpass
+```
+
+Otherwise:
+
+```bash
+pip install agentpass
+```
+
+Start a new OpenClaw session and the skill will be available. Read-only queries (states, history, config) execute instantly. State-changing actions (turning lights on/off, calling services) block until the Telegram guardian approves or denies.
+
+---
+
 ## Adding a Service (YAML Only)
 
 All service configuration happens on the **gateway**. Any HTTP API can be connected with just two files -- no Python code needed.
