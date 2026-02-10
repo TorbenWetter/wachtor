@@ -96,11 +96,20 @@ class TelegramAdapter(MessengerAdapter):
         ]
         markup = InlineKeyboardMarkup(keyboard)
 
-        text = f"Permission Request\n\nAction: {request.signature}"
+        # Build request message: signature + any extra args not in the signature
+        lines = [f"\U0001f6a8 {request.tool_name}"]
+        if request.signature:
+            lines.append(request.signature)
+        # Show args not captured by the signature template
+        sig_text = request.signature or ""
+        extra = {k: v for k, v in request.args.items() if str(v) not in sig_text}
+        if extra:
+            for k, v in extra.items():
+                lines.append(f"  {k}: {v}")
 
         msg = await self._app.bot.send_message(
             chat_id=self._config.chat_id,
-            text=text,
+            text="\n".join(lines),
             reply_markup=markup,
         )
         return str(msg.message_id)
@@ -155,7 +164,7 @@ class TelegramAdapter(MessengerAdapter):
             self._pending.pop(request_id, None)
 
         # Best-effort edit (may fail if message was already edited, network, etc.)
-        await self.update_approval(message_id, "Expired", "Approval timed out")
+        await self.update_approval(message_id, "\u23f0 Expired", "Approval timed out")
 
         if self._callback:
             result = ApprovalResult(
@@ -199,20 +208,31 @@ class TelegramAdapter(MessengerAdapter):
 
         await query.answer()
 
-        user = query.from_user
-        username = f"@{user.username}" if user.username else str(user.id)
-        time_str = time.strftime("%H:%M")
+        # Replace the header line with the resolution, keep all detail lines
+        original_text = query.message.text or ""
+        original_lines = original_text.strip().split("\n")
+        detail_lines = original_lines[1:] if len(original_lines) > 1 else []
 
-        status = "Approved" if action == "allow" else "Denied"
-        detail = f"{status} by {username} at {time_str}"
+        header = "\u2705 Approved" if action == "allow" else "\u274c Denied"
 
-        await self.update_approval(str(query.message.message_id), status, detail)
+        resolved_text = "\n".join([header, *detail_lines])
+
+        try:
+            await self._app.bot.edit_message_text(
+                chat_id=self._config.chat_id,
+                message_id=int(query.message.message_id),
+                text=resolved_text,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to edit Telegram message %s", query.message.message_id, exc_info=True
+            )
 
         if self._callback:
             result = ApprovalResult(
                 request_id=request_id,
                 action=action,
-                user_id=str(user.id),
+                user_id=str(query.from_user.id),
                 timestamp=time.time(),
             )
             await self._callback(result)

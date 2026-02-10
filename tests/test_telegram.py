@@ -89,8 +89,8 @@ class TestSendApproval:
         mock_app.bot.send_message.assert_awaited_once()
         call_kwargs = mock_app.bot.send_message.call_args.kwargs
         assert call_kwargs["chat_id"] == 12345
+        assert "ha_call_service" in call_kwargs["text"]
         assert "ha_call_service(light.turn_on, light.kitchen)" in call_kwargs["text"]
-        assert "Permission Request" in call_kwargs["text"]
 
         # Verify inline keyboard markup
         markup = call_kwargs["reply_markup"]
@@ -163,6 +163,9 @@ class TestHandleCallback:
         query.data = {"request_id": request_id, "action": action}
         query.message = MagicMock()
         query.message.message_id = 99
+        query.message.text = (
+            "\U0001f6a8 ha_call_service\nha_call_service(light.turn_on, light.kitchen)"
+        )
         query.answer = AsyncMock()
         update.callback_query = query
         return update
@@ -221,7 +224,7 @@ class TestHandleCallback:
         assert "req-1" not in adapter._pending
 
     async def test_edits_message_after_allow(self, adapter, mock_app):
-        """FR5-AC5: edits message to 'Approved by @alice at HH:MM'."""
+        """FR5-AC5: edits message to compact 'Approved' with tool name."""
         await adapter.on_approval_callback(AsyncMock())
 
         update = self._make_update(111, "alice", "req-2", "allow")
@@ -232,10 +235,10 @@ class TestHandleCallback:
         mock_app.bot.edit_message_text.assert_awaited_once()
         call_kwargs = mock_app.bot.edit_message_text.call_args.kwargs
         assert "Approved" in call_kwargs["text"]
-        assert "@alice" in call_kwargs["text"]
+        assert "ha_call_service" in call_kwargs["text"]
 
     async def test_edits_message_after_deny(self, adapter, mock_app):
-        """FR5-AC5: edits message to 'Denied by @user at HH:MM'."""
+        """FR5-AC5: edits message to compact 'Denied' with tool name."""
         await adapter.on_approval_callback(AsyncMock())
 
         update = self._make_update(222, "bob", "req-3", "deny")
@@ -246,10 +249,10 @@ class TestHandleCallback:
         mock_app.bot.edit_message_text.assert_awaited_once()
         call_kwargs = mock_app.bot.edit_message_text.call_args.kwargs
         assert "Denied" in call_kwargs["text"]
-        assert "@bob" in call_kwargs["text"]
+        assert "ha_call_service" in call_kwargs["text"]
 
-    async def test_user_without_username_shows_id(self, adapter, mock_app):
-        """When user has no username, shows numeric ID instead."""
+    async def test_resolved_message_includes_tool_name(self, adapter, mock_app):
+        """Resolved message includes the tool name from the original message."""
         await adapter.on_approval_callback(AsyncMock())
 
         update = self._make_update(111, None, "req-4", "allow")
@@ -258,7 +261,7 @@ class TestHandleCallback:
         await adapter._handle_callback(update, context)
 
         call_kwargs = mock_app.bot.edit_message_text.call_args.kwargs
-        assert "111" in call_kwargs["text"]
+        assert "ha_call_service" in call_kwargs["text"]
 
     async def test_answers_callback_query(self, adapter):
         """Handler calls query.answer() for allowed users."""

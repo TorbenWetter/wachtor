@@ -18,6 +18,27 @@ tools:
     response:
       wrap: "states"
 
+  ha_get_services:
+    description: "List available services and their fields"
+    request:
+      method: GET
+      path: "/api/services"
+    response:
+      wrap: "services"
+
+  ha_get_history:
+    description: "Get state history for an entity (last 24h)"
+    signature: "{entity_id}"
+    args:
+      entity_id:
+        required: true
+        validate: "^[a-z_][a-z0-9_]*(\\.[a-z0-9_]+)?$"
+    request:
+      method: GET
+      path: "/api/history/period?filter_entity_id={entity_id}"
+    response:
+      wrap: "history"
+
   ha_call_service:
     description: "Call a Home Assistant service"
     signature: "{domain}.{service}, {entity_id}"
