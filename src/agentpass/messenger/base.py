@@ -62,3 +62,7 @@ class MessengerAdapter(ABC):
     async def stop(self) -> None:
         """Gracefully shut down."""
         ...
+
+    async def health_check(self) -> bool:
+        """Return True if the messenger is healthy. Override in subclasses."""
+        return True

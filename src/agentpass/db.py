@@ -245,6 +245,15 @@ class Database:
         )
         await conn.commit()
 
+    async def health_check(self) -> bool:
+        """Return True if the database connection is alive."""
+        try:
+            conn = self._get_conn()
+            await conn.execute("SELECT 1")
+            return True
+        except Exception:
+            return False
+
     async def close(self) -> None:
         """Close the persistent connection."""
         if self._conn is not None:

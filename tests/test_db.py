@@ -339,3 +339,16 @@ class TestUpdateAuditResolution:
             resolved_by="12345",
             resolved_at=time.time(),
         )
+
+
+class TestHealthCheck:
+    async def test_returns_true_when_connected(self, db):
+        """health_check returns True when database connection is alive."""
+        assert await db.health_check() is True
+
+    async def test_returns_false_when_closed(self, tmp_path):
+        """health_check returns False after connection is closed."""
+        database = Database(str(tmp_path / "test.db"))
+        await database.initialize()
+        await database.close()
+        assert await database.health_check() is False

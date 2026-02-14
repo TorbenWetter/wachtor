@@ -67,6 +67,7 @@ def _make_mock_config(*, tls=None):
     config = MagicMock()
     config.gateway.host = "0.0.0.0"
     config.gateway.port = 8765
+    config.gateway.health_port = 8080
     config.gateway.tls = tls
     config.agent.token = "secret-token"
     config.messenger.telegram = MagicMock()
@@ -101,6 +102,28 @@ def _make_ws_serve_cm():
     mock_ws.__aenter__ = AsyncMock(return_value=mock_ws)
     mock_ws.__aexit__ = AsyncMock(return_value=False)
     return mock_ws
+
+
+def _make_mock_health_server():
+    """Build mock aiohttp web objects for the health endpoint."""
+    mock_runner = AsyncMock()
+    mock_runner.setup = AsyncMock()
+    mock_runner.cleanup = AsyncMock()
+    mock_site = AsyncMock()
+    mock_site.start = AsyncMock()
+    return mock_runner, mock_site
+
+
+@pytest.fixture(autouse=True)
+def _patch_health_server():
+    """Patch aiohttp web module to prevent binding to real ports."""
+    mock_runner, mock_site = _make_mock_health_server()
+    with (
+        patch(f"{_PATCH_PREFIX}.web.Application", return_value=MagicMock()),
+        patch(f"{_PATCH_PREFIX}.web.AppRunner", return_value=mock_runner),
+        patch(f"{_PATCH_PREFIX}.web.TCPSite", return_value=mock_site),
+    ):
+        yield
 
 
 # ---------------------------------------------------------------------------
@@ -821,3 +844,48 @@ class TestParseArgsSubcommands:
 
         args = parse_args(["pending"])
         assert args.command == "pending"
+
+
+class TestLogLevel:
+    """LOG_LEVEL environment variable support."""
+
+    def _run_main_with_log_level(self, level: str | None):
+        """Helper: run main() with a given LOG_LEVEL and return the root logger level."""
+        from agentpass.__main__ import main
+
+        # Reset root logger so basicConfig takes effect
+        root = logging.getLogger()
+        for h in root.handlers[:]:
+            root.removeHandler(h)
+        root.setLevel(logging.WARNING)  # reset to non-INFO default
+
+        mock_args = argparse.Namespace(command="serve")
+        env = {"LOG_LEVEL": level} if level else {}
+        with (
+            patch(f"{_PATCH_PREFIX}.parse_args", return_value=mock_args),
+            patch(f"{_PATCH_PREFIX}.asyncio.run"),
+            patch.dict("os.environ", env, clear=False),
+        ):
+            if level is None:
+                import os
+
+                os.environ.pop("LOG_LEVEL", None)
+            main(["--insecure"])
+
+        return root.level
+
+    def test_default_log_level_is_info(self):
+        """Without LOG_LEVEL env var, logging defaults to INFO."""
+        assert self._run_main_with_log_level(None) == logging.INFO
+
+    def test_log_level_debug(self):
+        """LOG_LEVEL=DEBUG sets root logger to DEBUG."""
+        assert self._run_main_with_log_level("DEBUG") == logging.DEBUG
+
+    def test_log_level_warning(self):
+        """LOG_LEVEL=WARNING sets root logger to WARNING."""
+        assert self._run_main_with_log_level("WARNING") == logging.WARNING
+
+    def test_invalid_log_level_defaults_to_info(self):
+        """Invalid LOG_LEVEL falls back to INFO."""
+        assert self._run_main_with_log_level("INVALID") == logging.INFO

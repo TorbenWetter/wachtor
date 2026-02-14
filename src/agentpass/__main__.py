@@ -14,6 +14,7 @@ from pathlib import Path
 
 import websockets
 import websockets.asyncio.server
+from aiohttp import web
 
 from agentpass.config import ConfigError, ServiceConfig, load_config, load_permissions
 from agentpass.db import Database
@@ -200,6 +201,7 @@ async def run(args: argparse.Namespace) -> None:
         approval_timeout=config.approval_timeout,
         rate_limit_config=config.rate_limit,
         registry=registry,
+        services=services,
     )
 
     # Wire approval callback
@@ -217,7 +219,29 @@ async def run(args: argparse.Namespace) -> None:
             ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             ssl_ctx.load_cert_chain(config.gateway.tls.cert, config.gateway.tls.key)
 
-        # 12. Start WebSocket server
+        # 12. Start health HTTP server
+        async def _health_handler(request: web.Request) -> web.Response:
+            try:
+                status = await gateway.health_status()
+                code = 200 if status["status"] == "healthy" else 503
+                return web.json_response(status, status=code)
+            except Exception:
+                logger.exception("Health check failed")
+                return web.json_response(
+                    {"status": "unhealthy", "error": "internal error"},
+                    status=500,
+                )
+
+        health_app = web.Application()
+        health_app.router.add_get("/healthz", _health_handler)
+        health_runner = web.AppRunner(health_app)
+        await health_runner.setup()
+        health_site = web.TCPSite(health_runner, config.gateway.host, config.gateway.health_port)
+        await health_site.start()
+        health_port = config.gateway.health_port
+        logger.info("Health endpoint on http://%s:%d/healthz", config.gateway.host, health_port)
+
+        # 13. Start WebSocket server
         async with websockets.asyncio.server.serve(
             gateway.handle_connection,
             config.gateway.host,
@@ -233,8 +257,9 @@ async def run(args: argparse.Namespace) -> None:
             )
             await stop_event.wait()
 
-        # 13. Graceful shutdown
+        # 14. Graceful shutdown
         logger.info("Shutting down...")
+        await health_runner.cleanup()
         await gateway.resolve_all_pending("gateway_shutdown")
         await telegram.stop()
         await ptb_app.updater.stop()
@@ -248,8 +273,9 @@ async def run(args: argparse.Namespace) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     """Synchronous entrypoint for the CLI."""
+    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, log_level, logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s — %(message)s",
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)

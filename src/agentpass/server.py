@@ -79,6 +79,7 @@ class GatewayServer:
         approval_timeout: int = 900,
         rate_limit_config: Any = None,
         registry: ToolRegistry | None = None,
+        services: dict[str, Any] | None = None,
     ) -> None:
         self._agent_token = agent_token
         self._engine = engine
@@ -87,6 +88,7 @@ class GatewayServer:
         self._db = db
         self._approval_timeout = approval_timeout
         self._registry = registry
+        self._services = services or {}
         self._rate_limiter = RateLimiter(
             rate_limit_config.max_requests_per_minute if rate_limit_config else 60
         )
@@ -96,6 +98,24 @@ class GatewayServer:
         self._agent_connected = False
         self._agent_ws: Any = None  # Current WebSocket connection
         self._resolve_lock = asyncio.Lock()
+
+    async def health_status(self) -> dict[str, Any]:
+        """Return health status of all components."""
+        db_ok = await self._db.health_check()
+        telegram_ok = await self._messenger.health_check()
+        services_status = {}
+        for name, svc in self._services.items():
+            services_status[name] = await svc.health_check()
+
+        all_critical_ok = db_ok and telegram_ok
+        return {
+            "status": "healthy" if all_critical_ok else "unhealthy",
+            "checks": {
+                "database": db_ok,
+                "telegram": telegram_ok,
+                "services": services_status,
+            },
+        }
 
     async def handle_connection(self, websocket: Any) -> None:
         """Handle a single agent WebSocket connection."""

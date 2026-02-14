@@ -98,6 +98,7 @@ def _make_server(**overrides) -> GatewayServer:
     executor = overrides.pop("executor", AsyncMock(spec=Executor))
     messenger = overrides.pop("messenger", AsyncMock(spec=MessengerAdapter))
     db = overrides.pop("db", AsyncMock(spec=Database))
+    services = overrides.pop("services", None)
     rate_limit_config = overrides.pop(
         "rate_limit_config",
         RateLimitConfig(max_pending_approvals=10, max_requests_per_minute=60),
@@ -112,6 +113,7 @@ def _make_server(**overrides) -> GatewayServer:
         approval_timeout=overrides.pop("approval_timeout", 900),
         rate_limit_config=rate_limit_config,
         registry=registry,
+        services=services,
     )
 
 
@@ -1232,3 +1234,65 @@ class TestListTools:
         lt_resp = [r for r in responses if r.get("id") == "lt-3"]
         for tool in lt_resp[0]["result"]["tools"]:
             assert tool["service"] == "homeassistant"
+
+
+class TestHealthStatus:
+    """Tests for GatewayServer.health_status()."""
+
+    async def test_healthy_when_all_ok(self):
+        """Returns healthy when db, messenger, and services are all up."""
+        db = AsyncMock(spec=Database)
+        db.health_check = AsyncMock(return_value=True)
+        messenger = AsyncMock(spec=MessengerAdapter)
+        messenger.health_check = AsyncMock(return_value=True)
+        svc = AsyncMock()
+        svc.health_check = AsyncMock(return_value=True)
+
+        server = _make_server(db=db, messenger=messenger, services={"ha": svc})
+        status = await server.health_status()
+
+        assert status["status"] == "healthy"
+        assert status["checks"]["database"] is True
+        assert status["checks"]["telegram"] is True
+        assert status["checks"]["services"]["ha"] is True
+
+    async def test_unhealthy_when_db_down(self):
+        """Returns unhealthy when database is down."""
+        db = AsyncMock(spec=Database)
+        db.health_check = AsyncMock(return_value=False)
+        messenger = AsyncMock(spec=MessengerAdapter)
+        messenger.health_check = AsyncMock(return_value=True)
+
+        server = _make_server(db=db, messenger=messenger)
+        status = await server.health_status()
+
+        assert status["status"] == "unhealthy"
+        assert status["checks"]["database"] is False
+
+    async def test_unhealthy_when_telegram_down(self):
+        """Returns unhealthy when Telegram bot is down."""
+        db = AsyncMock(spec=Database)
+        db.health_check = AsyncMock(return_value=True)
+        messenger = AsyncMock(spec=MessengerAdapter)
+        messenger.health_check = AsyncMock(return_value=False)
+
+        server = _make_server(db=db, messenger=messenger)
+        status = await server.health_status()
+
+        assert status["status"] == "unhealthy"
+        assert status["checks"]["telegram"] is False
+
+    async def test_healthy_with_service_down(self):
+        """Stays healthy when a service is down (services are non-critical)."""
+        db = AsyncMock(spec=Database)
+        db.health_check = AsyncMock(return_value=True)
+        messenger = AsyncMock(spec=MessengerAdapter)
+        messenger.health_check = AsyncMock(return_value=True)
+        svc = AsyncMock()
+        svc.health_check = AsyncMock(return_value=False)
+
+        server = _make_server(db=db, messenger=messenger, services={"ha": svc})
+        status = await server.health_status()
+
+        assert status["status"] == "healthy"
+        assert status["checks"]["services"]["ha"] is False

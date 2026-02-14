@@ -144,6 +144,13 @@ class TelegramAdapter(MessengerAdapter):
             task.cancel()
         self._pending.clear()
 
+    async def health_check(self) -> bool:
+        """Return True if the Telegram bot application is running."""
+        try:
+            return self._app.running
+        except Exception:
+            return False
+
     # ------------------------------------------------------------------
     # Timeout scheduling
     # ------------------------------------------------------------------

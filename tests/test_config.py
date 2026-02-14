@@ -167,6 +167,13 @@ class TestLoadConfig:
         assert cfg.gateway.port == 9999
         assert isinstance(cfg.gateway.port, int)
 
+    def test_health_port_equals_gateway_port_rejected(self, tmp_path, _tools_dir):
+        yaml_text = VALID_CONFIG_YAML.replace("port: 8443", "port: 8443\n  health_port: 8443")
+        p = tmp_path / "config.yaml"
+        p.write_text(yaml_text)
+        with pytest.raises(ConfigError, match=r"health_port.*must not equal.*port"):
+            load_config(str(p))
+
     def test_chat_id_string_coerced_to_int(self, tmp_path, _tools_dir, monkeypatch):
         monkeypatch.setenv("CHAT_ID", "-100999")
         yaml_text = VALID_CONFIG_YAML.replace("chat_id: -100123", 'chat_id: "${CHAT_ID}"')
