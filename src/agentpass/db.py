@@ -245,6 +245,109 @@ class Database:
         )
         await conn.commit()
 
+    async def get_audit_log_filtered(
+        self,
+        tool_name: str | None = None,
+        decision: str | None = None,
+        resolution: str | None = None,
+        from_ts: float | None = None,
+        to_ts: float | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[AuditEntry], int]:
+        """Return (entries, total_count) with filtering and pagination."""
+        conn = self._get_conn()
+        conditions: list[str] = []
+        params: list[Any] = []
+
+        if tool_name:
+            conditions.append("tool_name = ?")
+            params.append(tool_name)
+        if decision:
+            conditions.append("decision = ?")
+            params.append(decision)
+        if resolution:
+            conditions.append("resolution = ?")
+            params.append(resolution)
+        if from_ts is not None:
+            conditions.append("timestamp >= ?")
+            params.append(_epoch_to_iso(from_ts))
+        if to_ts is not None:
+            conditions.append("timestamp <= ?")
+            params.append(_epoch_to_iso(to_ts))
+
+        where = ""
+        if conditions:
+            where = "WHERE " + " AND ".join(conditions)
+
+        # Get total count
+        count_cursor = await conn.execute(f"SELECT COUNT(*) FROM audit_log {where}", params)
+        row = await count_cursor.fetchone()
+        total = row[0] if row else 0
+
+        # Get paginated entries
+        cursor = await conn.execute(
+            f"SELECT * FROM audit_log {where} ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?",
+            [*params, limit, offset],
+        )
+        rows = await cursor.fetchall()
+        return [self._row_to_audit_entry(dict(r)) for r in rows], total
+
+    async def get_audit_stats(self) -> dict[str, Any]:
+        """Return summary statistics from the audit log."""
+        conn = self._get_conn()
+
+        # Total requests
+        cursor = await conn.execute("SELECT COUNT(*) FROM audit_log")
+        row = await cursor.fetchone()
+        total = row[0] if row else 0
+
+        # Last 24 hours
+        cutoff = _epoch_to_iso(datetime.now(UTC).timestamp() - 86400)
+        cursor = await conn.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE timestamp >= ?", (cutoff,)
+        )
+        row = await cursor.fetchone()
+        last_24h = row[0] if row else 0
+
+        # Decision breakdown
+        cursor = await conn.execute("SELECT decision, COUNT(*) FROM audit_log GROUP BY decision")
+        decision_breakdown: dict[str, int] = {}
+        for r in await cursor.fetchall():
+            decision_breakdown[r[0]] = r[1]
+
+        # Approval rate (approved out of all ask decisions that resolved)
+        ask_total = decision_breakdown.get("ask", 0)
+        cursor = await conn.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE decision = 'ask' AND resolution = 'approved'"
+        )
+        row = await cursor.fetchone()
+        approved_count = row[0] if row else 0
+        approval_rate = approved_count / ask_total if ask_total > 0 else 0.0
+
+        # Top tools
+        cursor = await conn.execute(
+            "SELECT tool_name, COUNT(*) as cnt FROM audit_log "
+            "WHERE tool_name != '' GROUP BY tool_name ORDER BY cnt DESC LIMIT 10"
+        )
+        top_tools = [{"name": r[0], "count": r[1]} for r in await cursor.fetchall()]
+
+        return {
+            "total_requests": total,
+            "last_24h": last_24h,
+            "approval_rate": round(approval_rate, 2),
+            "top_tools": top_tools,
+            "decision_breakdown": decision_breakdown,
+        }
+
+    async def get_distinct_tool_names(self) -> list[str]:
+        """Return sorted list of distinct tool names from the audit log."""
+        conn = self._get_conn()
+        cursor = await conn.execute(
+            "SELECT DISTINCT tool_name FROM audit_log WHERE tool_name != '' ORDER BY tool_name"
+        )
+        return [r[0] for r in await cursor.fetchall()]
+
     async def health_check(self) -> bool:
         """Return True if the database connection is alive."""
         try:

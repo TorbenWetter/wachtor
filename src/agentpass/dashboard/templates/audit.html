@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentpass — Audit Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e1e4ed;
+    --text-dim: #8b8fa3;
+    --accent: #6c8cff;
+    --green: #4ade80;
+    --red: #f87171;
+    --amber: #fbbf24;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header span { color: var(--text-dim); font-size: 14px; }
+
+  /* Stats cards */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .stat-card .label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-card .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+  .stat-card .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  /* Filters */
+  .filters {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+  }
+  .filter-group { display: flex; flex-direction: column; gap: 4px; }
+  .filter-group label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .filter-group select, .filter-group input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 13px;
+    min-width: 140px;
+  }
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 7px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+
+  /* Table */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover { background: rgba(108, 140, 255, 0.05); }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-allow { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+  .badge-deny { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+  .badge-ask { background: rgba(251, 191, 36, 0.15); color: var(--amber); }
+  .badge-approved { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+  .badge-denied { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+  .badge-timed_out { background: rgba(251, 191, 36, 0.15); color: var(--amber); }
+  .badge-executed { background: rgba(108, 140, 255, 0.15); color: var(--accent); }
+
+  .sig { font-family: "SF Mono", "Fira Code", monospace; font-size: 12px; }
+  .ts { color: var(--text-dim); white-space: nowrap; font-size: 12px; }
+
+  /* Detail row */
+  .detail-row { display: none; }
+  .detail-row.open { display: table-row; }
+  .detail-row td {
+    background: var(--bg);
+    padding: 12px 16px;
+  }
+  .detail-content { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .detail-section h4 { font-size: 11px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 4px; }
+  .detail-section pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 12px;
+    overflow-x: auto;
+    max-height: 200px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  /* Pagination */
+  .pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border);
+  }
+  .pagination .pages { display: flex; gap: 4px; }
+  .pagination a {
+    color: var(--accent);
+    text-decoration: none;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .pagination a:hover { background: var(--surface); }
+  .pagination a.disabled { pointer-events: none; opacity: 0.4; }
+
+  .empty { text-align: center; padding: 48px 24px; color: var(--text-dim); }
+
+  @media (max-width: 768px) {
+    .detail-content { grid-template-columns: 1fr; }
+    .filters { flex-direction: column; }
+    .filter-group select, .filter-group input { min-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>agentpass</h1>
+    <span>Audit Dashboard</span>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="label">Total Requests</div>
+      <div class="value">{{ stats.total_requests }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Last 24 Hours</div>
+      <div class="value">{{ stats.last_24h }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Approval Rate</div>
+      <div class="value">{{ (stats.approval_rate * 100) | round(0) | int }}%</div>
+      <div class="sub">of ask decisions approved</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Top Tool</div>
+      <div class="value" style="font-size: 16px;">{% if stats.top_tools %}{{ stats.top_tools[0].name }}{% else %}&mdash;{% endif %}</div>
+      {% if stats.top_tools %}
+      <div class="sub">{{ stats.top_tools[0].count }} requests</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <form class="filters" method="get" action="/audit/">
+    <div class="filter-group">
+      <label>Tool</label>
+      <select name="tool_name">
+        <option value="">All tools</option>
+        {% for t in tool_names %}
+        <option value="{{ t }}" {% if filters.get('tool_name') == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Decision</label>
+      <select name="decision">
+        <option value="">All</option>
+        {% for d in ['allow', 'deny', 'ask'] %}
+        <option value="{{ d }}" {% if filters.get('decision') == d %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Resolution</label>
+      <select name="resolution">
+        <option value="">All</option>
+        {% for r in ['executed', 'approved', 'denied', 'timed_out'] %}
+        <option value="{{ r }}" {% if filters.get('resolution') == r %}selected{% endif %}>{{ r }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>From</label>
+      <input type="date" name="from" value="{{ filters.get('from', '') }}">
+    </div>
+    <div class="filter-group">
+      <label>To</label>
+      <input type="date" name="to" value="{{ filters.get('to', '') }}">
+    </div>
+    <button type="submit" class="btn">Apply</button>
+    <a href="/audit/" class="btn btn-secondary">Clear</a>
+  </form>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    {% if entries %}
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Tool</th>
+          <th>Signature</th>
+          <th>Decision</th>
+          <th>Resolution</th>
+          <th>Resolved By</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+        <tr class="clickable" onclick="toggleDetail('detail-{{ loop.index }}')">
+          <td class="ts">{{ entry.timestamp | format_ts }}</td>
+          <td>{{ entry.tool_name }}</td>
+          <td class="sig">{{ entry.signature | truncate(50) }}</td>
+          <td><span class="badge badge-{{ entry.decision }}">{{ entry.decision }}</span></td>
+          <td>
+            {% if entry.resolution %}
+            <span class="badge badge-{{ entry.resolution }}">{{ entry.resolution }}</span>
+            {% else %}
+            <span style="color: var(--text-dim);">&mdash;</span>
+            {% endif %}
+          </td>
+          <td style="color: var(--text-dim);">{% if entry.resolved_by %}{{ entry.resolved_by }}{% else %}&mdash;{% endif %}</td>
+        </tr>
+        <tr class="detail-row" id="detail-{{ loop.index }}">
+          <td colspan="6">
+            <div class="detail-content">
+              <div class="detail-section">
+                <h4>Arguments</h4>
+                <pre>{{ entry.args | tojson(indent=2) }}</pre>
+              </div>
+              <div class="detail-section">
+                <h4>Execution Result</h4>
+                <pre>{% if entry.execution_result %}{{ entry.execution_result | tojson(indent=2) }}{% else %}No result{% endif %}</pre>
+              </div>
+              <div class="detail-section">
+                <h4>Request Details</h4>
+                <pre>Request ID: {{ entry.request_id }}
+Agent ID: {{ entry.agent_id }}
+Timestamp: {{ entry.timestamp | format_ts }}{% if entry.resolved_at %}
+Resolved At: {{ entry.resolved_at | format_ts }}{% endif %}</pre>
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Pagination -->
+    <div class="pagination">
+      <span>Showing {{ ((page - 1) * per_page) + 1 }}&ndash;{{ [page * per_page, total] | min }} of {{ total }}</span>
+      <div class="pages">
+        <a href="?{{ query_string(page=page - 1) }}" class="{% if page <= 1 %}disabled{% endif %}">Prev</a>
+        <a href="?{{ query_string(page=page + 1) }}" class="{% if page >= pages %}disabled{% endif %}">Next</a>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty">
+      {% if filters %}
+        No entries match your filters. <a href="/audit/" style="color: var(--accent);">Clear filters</a>
+      {% else %}
+        No audit entries yet.
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function toggleDetail(id) {
+  var row = document.getElementById(id);
+  if (row) row.classList.toggle('open');
+}
+</script>
+</body>
+</html>

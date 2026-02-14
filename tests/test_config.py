@@ -142,6 +142,10 @@ class TestLoadConfig:
         assert cfg.storage.type == "sqlite"
         assert cfg.storage.path == "./data/test.db"
 
+    def test_default_health_host(self, config_file):
+        cfg = load_config(str(config_file))
+        assert cfg.gateway.health_host == "127.0.0.1"
+
     def test_default_approval_timeout(self, config_file):
         cfg = load_config(str(config_file))
         assert cfg.approval_timeout == 900

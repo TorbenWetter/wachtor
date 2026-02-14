@@ -17,6 +17,7 @@ import websockets.asyncio.server
 from aiohttp import web
 
 from agentpass.config import ConfigError, ServiceConfig, load_config, load_permissions
+from agentpass.dashboard import setup_dashboard
 from agentpass.db import Database
 from agentpass.engine import PermissionEngine
 from agentpass.executor import Executor
@@ -234,12 +235,17 @@ async def run(args: argparse.Namespace) -> None:
 
         health_app = web.Application()
         health_app.router.add_get("/healthz", _health_handler)
+
+        # Wire dashboard routes
+        setup_dashboard(health_app, db)
+
         health_runner = web.AppRunner(health_app)
         await health_runner.setup()
-        health_site = web.TCPSite(health_runner, config.gateway.host, config.gateway.health_port)
-        await health_site.start()
+        health_host = config.gateway.health_host
         health_port = config.gateway.health_port
-        logger.info("Health endpoint on http://%s:%d/healthz", config.gateway.host, health_port)
+        health_site = web.TCPSite(health_runner, health_host, health_port)
+        await health_site.start()
+        logger.info("Health/dashboard on http://%s:%d", health_host, health_port)
 
         # 13. Start WebSocket server
         async with websockets.asyncio.server.serve(

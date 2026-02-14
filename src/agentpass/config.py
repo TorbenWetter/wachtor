@@ -59,6 +59,7 @@ class GatewayConfig:
     port: int
     tls: TLSConfig | None = None
     health_port: int = 8080
+    health_host: str = "127.0.0.1"
 
 
 @dataclass
@@ -234,7 +235,10 @@ def load_config(path: str = "config.yaml") -> Config:
         raise ConfigError(
             f"gateway.health_port ({health_port}) must not equal gateway.port ({port})"
         )
-    gateway = GatewayConfig(host=host, port=port, tls=tls, health_port=health_port)
+    health_host = gw_raw.get("health_host", "127.0.0.1")
+    gateway = GatewayConfig(
+        host=host, port=port, tls=tls, health_port=health_port, health_host=health_host
+    )
 
     # Agent
     agent_raw = _require(raw, "agent", "")

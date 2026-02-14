@@ -68,6 +68,7 @@ def _make_mock_config(*, tls=None):
     config.gateway.host = "0.0.0.0"
     config.gateway.port = 8765
     config.gateway.health_port = 8080
+    config.gateway.health_host = "127.0.0.1"
     config.gateway.tls = tls
     config.agent.token = "secret-token"
     config.messenger.telegram = MagicMock()
